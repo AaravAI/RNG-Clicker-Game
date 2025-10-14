@@ -22,11 +22,11 @@
       .btn-amber{background:linear-gradient(180deg,#fbbf24,#b45309);color:#111827}
       .section{background:rgba(24,24,30,.65);border:1px solid rgba(120,120,140,.25)}
       .chip{background:rgba(20,20,26,.8);border:1px solid rgba(120,120,140,.25)}
+      @keyframes floatUp{0%{transform:translateY(0) scale(1);opacity:1}70%{opacity:.9}100%{transform:translateY(-80px) scale(.96);opacity:0}}
+      .particle{position:absolute;pointer-events:none;color:#faffff;font-weight:700;text-shadow:0 1px 0 rgba(0,0,0,.5);animation:floatUp 800ms ease forwards}
       .hero-gradient{background:radial-gradient(1200px 600px at 20% -20%, #1f2937 0%, transparent 60%),radial-gradient(1000px 500px at 120% 10%, #0ea5e9 0%, transparent 45%),radial-gradient(900px 600px at 50% 120%, #a78bfa 0%, transparent 45%),linear-gradient(180deg, #0b0f14 0%, #090a0e 100%)}
       @keyframes pop{0%{transform:scale(.9);opacity:0}60%{transform:scale(1.02);opacity:1}100%{transform:scale(1)}}
       .pop{animation:pop .35s ease both}
-      @keyframes floatUp{0%{transform:translateY(0) scale(1);opacity:1}70%{opacity:.9}100%{transform:translateY(-80px) scale(.96);opacity:0}}
-      .particle{position:absolute;pointer-events:none;color:#faffff;font-weight:700;text-shadow:0 1px 0 rgba(0,0,0,.5);animation:floatUp 800ms ease forwards}
     </style>
   </head>
   <body>
@@ -66,8 +66,8 @@
       const DISPLAY_RATES_MAIN=[{r:"Common",p:"79.799%"},{r:"Rare",p:"15%"},{r:"Epic",p:"4%"},{r:"Legendary",p:"1%"},{r:"Mythic",p:"0.1%"},{r:"Unique",p:"0.001%"},{r:"Impossible",p:"0.00001%"}];
       const DISPLAY_RATES_EVENT=[{r:"Nothing",p:"99%"},{r:"Event",p:"1%"},{r:"Special Event",p:"0.01%"}];
 
-      /* ---------- storage (single-slot, no login) ---------- */
-      const SAVE_VERSION="rng_clicker_nologin_v1";
+      /* ---------- storage (single-slot) ---------- */
+      const SAVE_VERSION="rng_clicker_pages_nologin_v2";
       const LS_KEY="rng_clicker_"+SAVE_VERSION;
       const defState={
         points:0,totalClicks:0,
@@ -83,8 +83,8 @@
         showHelp:true,
         autoDelete:{Common:false,Rare:false,Epic:false,Legendary:false,Mythic:false},
       };
-      const saveState=s=>{ try{localStorage.setItem(LS_KEY,JSON.stringify(s))}catch{} };
-      const loadState=()=>{ try{const raw=localStorage.getItem(LS_KEY); if(raw) return {...defState,...JSON.parse(raw)} }catch{}; return {...defState}; };
+      const saveState=s=>{try{localStorage.setItem(LS_KEY,JSON.stringify(s))}catch{}};
+      const loadState=()=>{try{const raw=localStorage.getItem(LS_KEY); if(raw) return {...defState,...JSON.parse(raw)}}catch{}; return {...defState};};
 
       /* ---------- math ---------- */
       const skinUpgradeCost=l=>10**(l+2);     // 100,1k,10k...
@@ -103,7 +103,7 @@
         return{ppc:ch.reduce((a,e)=>a+e.ppc,0),label:ch.map(e=>`${e.rarity} ${SKIN.name} (${toRoman(e.level)||'I'}) +${e.ppc}`).join(" + ")};
       }
 
-      /* ---------- Cover (simple Start Playing) ---------- */
+      /* ---------- Cover ---------- */
       function Cover({onStart}){
         return (
           <div className="fixed inset-0 z-50 hero-gradient bg-grid text-zinc-100 overflow-y-auto">
@@ -115,7 +115,7 @@
                     <h1 className="mt-2 text-5xl font-extrabold leading-tight">RNG Clicker</h1>
                     <p className="mt-3 text-zinc-300">
                       Click the big box to earn points. Spend points to open the <b>Main Box</b> (regular skins) or the <b>Event Box</b> (Event &amp; Special skins).
-                      Skins add to your <b>Points Per Click (PPC)</b>. Upgrade skins to boost power, and <b>Rebirth</b> to equip more skins at once.
+                      Skins add to your <b>PPC</b>. Upgrade skins to boost power, and <b>Rebirth</b> to equip more skins at once.
                       Turn on the <b>Auto-Opener</b> to open boxes automatically while you keep clicking. Autosaves locally.
                     </p>
 
@@ -161,9 +161,8 @@
                       <div className="text-sm font-semibold">Upgrades you can buy</div>
                       <ul className="mt-2 text-sm text-zinc-300 space-y-1.5">
                         <li>• <b>Autoclicker</b> — passive points (never pauses).</li>
-                        <li>• <b>Auto-Opener</b> — opens boxes automatically. <span className="text-zinc-400">Stop: CTRL+5</span></li>
-                        <li>• <b>Auto-Opener Speed</b> — Lv0: 1s, Lv1: 0.5s, Lv2/3: 0.25s (costs 1k → 1M → 100M).</li>
                         <li>• <b>Auto-Opener Rate</b> — more boxes per batch.</li>
+                        <li>• <b>Auto-Opener Speed</b> — Lv0: 1s, Lv1: 0.5s, Lv2/3: 0.25s (costs 1k → 1M → 100M).</li>
                         <li>• <b>Expand Inventory</b> — +20 slots each time.</li>
                         <li>• <b>Rebirth</b> — +1 equip slot.</li>
                         <li>• <b>Auto-Delete</b> — optionally bin fresh Common→Mythic drops (refund 20%).</li>
@@ -182,7 +181,6 @@
       /* ---------- App (single-slot) ---------- */
       function App(){
         const [state,setState]=useState(loadState());
-        const [showCover,setShowCover]=useState(true);
         const equipped=useMemo(()=>equippedBest(state.inventory,state.rebirths+1),[state.inventory,state.rebirths]);
         const ppc=useMemo(()=>1+equipped.ppc,[equipped]);
 
@@ -197,19 +195,19 @@
           let pts=state.points, inv=[...state.inventory], tokens=state.eventTokens;
 
           // autoclicker always accrues
-          const acInt=autoInt(state.autoClickerLevel); pts+=Math.floor(elapsed/acInt);
+          const acInt=60/2**Math.min(state.autoClickerLevel,6); pts+=Math.floor(elapsed/acInt);
 
-          // auto-opener ticks (respect mode, cost, tokens, cap)
+          // auto-opener ticks
           if(state.autoOpenerActive){
-            const rate=openRate(state.autoOpenerLevel);
-            const intv=speedInterval(state.autoOpenerSpeedLevel);
+            const rate=1+state.autoOpenerLevel;
+            const intv= (state.autoOpenerSpeedLevel<=0?1 : state.autoOpenerSpeedLevel===1?0.5 : 0.25);
             let ticks=Math.floor(elapsed/intv), ops=ticks*rate;
             while(ops-- > 0){
               const cnt=inv.reduce((a,i)=>a+i.qty,0);
               if(state.autoOpenerMode==="main"){
                 if(pts<MAIN_BOX.cost||cnt>=state.invCap) break;
                 pts-=MAIN_BOX.cost; const r=roll(MAIN_BOX.rng);
-                if(state.autoDelete[r]){pts+=Math.floor(MAIN_BOX.cost*0.2);}
+                if(state.autoDelete[r]) pts+=Math.floor(MAIN_BOX.cost*0.2);
                 else{const idx=inv.findIndex(i=>i.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1});}
               }else{
                 if(tokens<=0||pts<EVENT_BOX.cost||cnt>=state.invCap) break;
@@ -225,7 +223,7 @@
         useEffect(()=>{
           let acc=0; const tick=100;
           const id=setInterval(()=>{ setState(s=>{
-            acc+=tick/1000; const intv=autoInt(s.autoClickerLevel);
+            acc+=tick/1000; const intv=60/2**Math.min(s.autoClickerLevel,6);
             let gained=0; while(acc>=intv){gained++; acc-=intv;}
             if(gained===0) return s; return {...s,points:s.points+gained,lastSeen:Date.now()};
           }) },tick);
@@ -235,10 +233,10 @@
         // auto-opener loop (online)
         useEffect(()=>{
           if(!state.autoOpenerActive) return;
-          const ms=speedInterval(state.autoOpenerSpeedLevel)*1000;
+          const ms=(state.autoOpenerSpeedLevel<=0?1 : state.autoOpenerSpeedLevel===1?0.5 : 0.25)*1000;
           const id=setInterval(()=>{
             setState(s=>{
-              const rate=openRate(s.autoOpenerLevel);
+              const rate=1+s.autoOpenerLevel;
               let pts=s.points, inv=[...s.inventory], tokens=s.eventTokens;
               for(let i=0;i<rate;i++){
                 const cnt=inv.reduce((a,i)=>a+i.qty,0);
@@ -246,7 +244,7 @@
                 if(s.autoOpenerMode==="main"){
                   if(pts<MAIN_BOX.cost) return {...s,autoOpenerActive:false};
                   pts-=MAIN_BOX.cost; const r=roll(MAIN_BOX.rng);
-                  if(s.autoDelete[r]){pts+=Math.floor(MAIN_BOX.cost*0.2);}
+                  if(s.autoDelete[r]) pts+=Math.floor(MAIN_BOX.cost*0.2);
                   else{const idx=inv.findIndex(it=>it.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1});}
                 }else{
                   if(tokens<=0 || pts<EVENT_BOX.cost) return {...s,autoOpenerActive:false};
@@ -262,22 +260,22 @@
 
         /* ---------- actions ---------- */
         const clickPlay=e=>{ setState(s=>({...s,points:s.points+ppc,totalClicks:s.totalClicks+1})); if(e) spawnParticle(e,`+${ppc}`); };
+        const invCount=s=>s.inventory.reduce((a,i)=>a+i.qty,0);
         const openMain=()=>setState(s=>{
-          const cnt=s.inventory.reduce((a,i)=>a+i.qty,0); if(s.points<MAIN_BOX.cost||cnt>=s.invCap) return s;
+          if(s.points<MAIN_BOX.cost||invCount(s)>=s.invCap) return s;
           let pts=s.points-MAIN_BOX.cost; const r=roll(MAIN_BOX.rng);
-          if(s.autoDelete[r]){pts+=Math.floor(MAIN_BOX.cost*0.2); return {...s,points:pts};}
+          if(s.autoDelete[r]) return {...s,points:pts+Math.floor(MAIN_BOX.cost*0.2)};
           const inv=[...s.inventory]; const idx=inv.findIndex(i=>i.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1});
           return {...s,points:pts,inventory:inv};
         });
         const openEvent=()=>setState(s=>{
-          const cnt=s.inventory.reduce((a,i)=>a+i.qty,0); if(s.eventTokens<=0||s.points<EVENT_BOX.cost||cnt>=s.invCap) return s;
+          if(s.eventTokens<=0||s.points<EVENT_BOX.cost||invCount(s)>=s.invCap) return s;
           let pts=s.points-EVENT_BOX.cost; let tok=s.eventTokens-1; const r=roll(EVENT_BOX.rng);
           if(r==="Nothing") return {...s,points:pts,eventTokens:tok};
           const inv=[...s.inventory]; const idx=inv.findIndex(i=>i.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1});
           return {...s,points:pts,eventTokens:tok,inventory:inv};
         });
         const buyToken=()=>setState(s=> s.points>=EVENT_BOX.tokenCost?{...s,points:s.points-EVENT_BOX.tokenCost,eventTokens:s.eventTokens+1}:s);
-
         const upgradeSkin=it=>{
           const cost=skinUpgradeCost(it.level);
           setState(s=>{
@@ -299,26 +297,6 @@
         const upgradeSpeed=()=>setState(s=> (s.autoOpenerSpeedLevel>=3||s.points<costSpeed(s.autoOpenerSpeedLevel))?s:{...s,points:s.points-costSpeed(s.autoOpenerSpeedLevel),autoOpenerSpeedLevel:s.autoOpenerSpeedLevel+1});
         const expandInv=()=>setState(s=> s.points<costInv(s.invUpgrades)?s:{...s,points:s.points-costInv(s.invUpgrades),invCap:s.invCap+20,invUpgrades:s.invUpgrades+1});
         const rebirth=()=>setState(s=> s.points<costReb(s.rebirths)?s:{...s,points:0,rebirths:s.rebirths+1});
-
-        // Export / Import helpers
-        function doExport(){
-          const raw=JSON.stringify(state);
-          const blob=new Blob([raw],{type:"application/json"});
-          const url=URL.createObjectURL(blob); const a=document.createElement("a");
-          a.href=url; a.download="rng_clicker_save.json"; a.click(); URL.revokeObjectURL(url);
-        }
-        function onImportFile(ev){
-          const f=ev.target.files?.[0]; if(!f) return;
-          const rdr=new FileReader();
-          rdr.onload=()=>{ try{
-              const obj=JSON.parse(String(rdr.result||"{}"));
-              const merged={...defState,...obj,lastSeen:Date.now()};
-              setState(merged); saveState(merged);
-              alert("Save imported!");
-            }catch{ alert("Invalid save file."); } };
-          rdr.readAsText(f);
-          ev.target.value="";
-        }
 
         /* ---------- UI ---------- */
         return (
@@ -346,15 +324,22 @@
               </div>
               <div className="flex items-center gap-3 text-xs text-zinc-300">
                 <span>PPC: <b>{ppc}</b></span>
-                <span>• Auto: every {clamp2(autoInt(state.autoClickerLevel))}s (≈ {autoPerMin(state.autoClickerLevel)}/min)</span>
+                <span>• Auto: every {clamp2(60/2**Math.min(state.autoClickerLevel,6))}s (≈ {autoPerMin(state.autoClickerLevel)}/min)</span>
                 <span>• Opener: {openRate(state.autoOpenerLevel)} / {clamp2(speedInterval(state.autoOpenerSpeedLevel))}s ({state.autoOpenerMode})</span>
                 <span>• Tokens: {state.eventTokens}</span>
                 <span>• Rebirths: {state.rebirths}</span>
                 <span>• Inv: {state.inventory.reduce((a,i)=>a+i.qty,0)}/{state.invCap}</span>
                 <span>• Points: <b>{fmt(state.points)}</b></span>
-                <button className="btn px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm" onClick={doExport}>Export</button>
+                <button className="btn px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm" onClick={()=>{
+                  const raw=JSON.stringify(state); const blob=new Blob([raw],{type:"application/json"});
+                  const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="rng_clicker_save.json"; a.click(); URL.revokeObjectURL(url);
+                }}>Export</button>
                 <label className="btn px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm cursor-pointer">
-                  Import<input type="file" accept="application/json" className="hidden" onChange={onImportFile}/>
+                  Import<input type="file" accept="application/json" className="hidden" onChange={(ev)=>{
+                    const f=ev.target.files?.[0]; if(!f) return; const r=new FileReader();
+                    r.onload=()=>{try{const obj=JSON.parse(String(r.result||"{}")); const merged={...defState,...obj,lastSeen:Date.now()}; setState(merged); saveState(merged); alert("Save imported!")}catch{alert("Invalid save file.")}};
+                    r.readAsText(f); ev.target.value="";
+                  }}/>
                 </label>
               </div>
             </div>
@@ -363,13 +348,14 @@
             <div className="pt-14 grid grid-cols-5 gap-4 h-full p-4">
               {/* Click Zone */}
               <div className="col-span-3">
-                <div className="relative w-full h-full section rounded-2xl overflow-hidden" onClick={(e)=>clickPlay(e)}>
+                <div className="relative w-full h-full section rounded-2xl overflow-hidden"
+                     onClick={(e)=>clickPlay(e)}>
                   <div className="relative h-full flex items-center justify-center">
                     <div className="text-center">
                       <div className="text-6xl font-extrabold drop-shadow">{fmt(state.points)}</div>
                       <div className="text-zinc-400 mt-2">points</div>
                       <div className="mt-6 text-2xl">Click anywhere in this box (+{ppc} per click)</div>
-                      <div className="mt-2 text-zinc-400">Equipped: {equipped(state.inventory,state.rebirths+1)?.label || "None"}</div>
+                      <div className="mt-2 text-zinc-400">Equipped: {equipped.label || "None"}</div>
                     </div>
                   </div>
                 </div>
@@ -389,7 +375,15 @@
                         <div className="text-sm text-zinc-400">Cost: {fmt(MAIN_BOX.cost)}</div>
                         <div className="text-xs text-zinc-500 mt-1">C 79.799% • R 15% • E 4% • L 1% • M 0.1% • U 0.001% • IMP 0.00001%</div>
                       </div>
-                      <button className={`btn px-3 py-2 rounded-lg text-sm ${(state.points>=MAIN_BOX.cost && state.inventory.reduce((a,i)=>a+i.qty,0)<state.invCap) ? "btn-emerald" : "bg-zinc-700 cursor-not-allowed"}`} onClick={openMain}>Open</button>
+                      <button className={`btn px-3 py-2 rounded-lg text-sm ${(state.points>=MAIN_BOX.cost && state.inventory.reduce((a,i)=>a+i.qty,0)<state.invCap) ? "btn-emerald" : "bg-zinc-700 cursor-not-allowed"}`} onClick={()=>{
+                        setState(s=>{
+                          const cnt=s.inventory.reduce((a,i)=>a+i.qty,0); if(s.points<MAIN_BOX.cost||cnt>=s.invCap) return s;
+                          let pts=s.points-MAIN_BOX.cost; const r=roll(MAIN_BOX.rng);
+                          if(s.autoDelete[r]) pts+=Math.floor(MAIN_BOX.cost*0.2);
+                          else{const inv=[...s.inventory]; const idx=inv.findIndex(i=>i.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1}); return {...s,points:pts,inventory:inv};}
+                          return {...s,points:pts};
+                        });
+                      }}>Open</button>
                     </div>
 
                     <div className="mt-2 flex items-center justify-between rounded-xl p-3 chip">
@@ -399,17 +393,27 @@
                         <div className="text-xs text-zinc-500 mt-1">Nothing 99% • Event 1% • Special 0.01%</div>
                       </div>
                       <div className="flex gap-2">
-                        <button className={`btn px-3 py-2 rounded-lg text-sm ${(state.points>=EVENT_BOX.cost && state.eventTokens>0 && state.inventory.reduce((a,i)=>a+i.qty,0)<state.invCap) ? "btn-amber" : "bg-zinc-700 cursor-not-allowed"}`} onClick={openEvent}>Open</button>
-                        <button className={`btn px-3 py-2 rounded-lg text-sm ${state.points>=EVENT_BOX.tokenCost ? "btn-sky" : "bg-zinc-700 cursor-not-allowed"}`} onClick={buyToken}>Buy Token ({fmt(EVENT_BOX.tokenCost)})</button>
+                        <button className={`btn px-3 py-2 rounded-lg text-sm ${(state.points>=EVENT_BOX.cost && state.eventTokens>0 && state.inventory.reduce((a,i)=>a+i.qty,0)<state.invCap) ? "btn-amber" : "bg-zinc-700 cursor-not-allowed"}`} onClick={()=>{
+                          setState(s=>{
+                            const cnt=s.inventory.reduce((a,i)=>a+i.qty,0); if(s.eventTokens<=0||s.points<EVENT_BOX.cost||cnt>=s.invCap) return s;
+                            let pts=s.points-EVENT_BOX.cost; let tok=s.eventTokens-1; const r=roll(EVENT_BOX.rng);
+                            if(r==="Nothing") return {...s,points:pts,eventTokens:tok};
+                            const inv=[...s.inventory]; const idx=inv.findIndex(i=>i.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1});
+                            return {...s,points:pts,eventTokens:tok,inventory:inv};
+                          });
+                        }}>Open</button>
+                        <button className={`btn px-3 py-2 rounded-lg text-sm ${state.points>=EVENT_BOX.tokenCost ? "btn-sky" : "bg-zinc-700 cursor-not-allowed"}`} onClick={()=>setState(s=> s.points>=EVENT_BOX.tokenCost?{...s,points:s.points-EVENT_BOX.tokenCost,eventTokens:s.eventTokens+1}:s)}>
+                          Buy Token ({fmt(EVENT_BOX.tokenCost)})
+                        </button>
                       </div>
                     </div>
 
                     <div className="mt-2 flex items-center justify-between rounded-xl p-3 chip">
                       <div>
                         <div className="font-medium">Expand Inventory</div>
-                        <div className="text-xs text-zinc-400">+20 slots • Next cost {fmt(costInv(state.invUpgrades))}</div>
+                        <div className="text-xs text-zinc-400">+20 slots • Next cost {fmt(10**(state.invUpgrades+2))}</div>
                       </div>
-                      <button className={`btn px-3 py-2 rounded-lg text-sm ${state.points>=costInv(state.invUpgrades) ? "btn-sky" : "bg-zinc-700 cursor-not-allowed"}`} onClick={expandInv}>Buy</button>
+                      <button className={`btn px-3 py-2 rounded-lg text-sm ${state.points>=10**(state.invUpgrades+2) ? "btn-sky" : "bg-zinc-700 cursor-not-allowed"}`} onClick={()=>setState(s=> s.points<10**(s.invUpgrades+2)?s:{...s,points:s.points-10**(s.invUpgrades+2),invCap:s.invCap+20,invUpgrades:s.invUpgrades+1})}>Buy</button>
                     </div>
                   </div>
 
@@ -433,12 +437,12 @@
                     <div className="mt-2 grid grid-cols-1 gap-2">
                       {state.inventory.length===0 && (<div className="text-zinc-400 text-sm">No skins yet. Open boxes!</div>)}
                       {state.inventory.map(it=>{
-                        const cost=skinUpgradeCost(it.level); const can=state.points>=cost;
+                        const cost=10**(it.level+2); const can=state.points>=cost;
                         return (
                           <div key={it.rarity} className="flex items-center justify-between rounded-xl p-3 chip">
                             <div>
                               <div className="font-medium">{it.rarity} {SKIN.name} <span className="opacity-70">{toRoman(it.level)||'I'}</span></div>
-                              <div className="text-xs text-zinc-300">+{skinPpc(it)} PPC • Copies {it.qty}</div>
+                              <div className="text-xs text-zinc-300">+{SKIN.base[it.rarity]+SKIN.gain[it.rarity]*it.level} PPC • Copies {it.qty}</div>
                             </div>
                             <div className="flex items-center gap-2">
                               <button className={`btn px-3 py-2 rounded-lg text-sm ${can? "btn-sky":"bg-zinc-700 cursor-not-allowed"}`} onClick={()=>upgradeSkin(it)}>
@@ -459,22 +463,22 @@
                     <div className="mt-3 flex items-center justify-between rounded-xl p-3 chip">
                       <div>
                         <div className="font-medium">Autoclicker Lv {state.autoClickerLevel} {state.autoClickerLevel>=6 && "(MAX)"}</div>
-                        <div className="text-xs text-zinc-400">Every {clamp2(autoInt(state.autoClickerLevel))}s (≈ {autoPerMin(state.autoClickerLevel)}/min)</div>
+                        <div className="text-xs text-zinc-400">Every {clamp2(60/2**Math.min(state.autoClickerLevel,6))}s (≈ {2**Math.min(state.autoClickerLevel,6)}/min)</div>
                       </div>
                       <button className={`btn px-3 py-2 rounded-lg text-sm ${
                         state.autoClickerLevel>=6 ? "bg-zinc-700 cursor-not-allowed" :
-                        (state.points>=costAuto(state.autoClickerLevel) ? "btn-fuchsia" : "bg-zinc-700 cursor-not-allowed")
-                      }`} onClick={upgradeAuto}>
-                        {state.autoClickerLevel>=6 ? "Maximum" : `Upgrade (${fmt(costAuto(state.autoClickerLevel))})`}
+                        (state.points>=10**(state.autoClickerLevel+2) ? "btn-fuchsia" : "bg-zinc-700 cursor-not-allowed")
+                      }`} onClick={()=>upgradeAuto()}>
+                        {state.autoClickerLevel>=6 ? "Maximum" : `Upgrade (${fmt(10**(state.autoClickerLevel+2))})`}
                       </button>
                     </div>
 
                     <div className="mt-3 flex items-center justify-between rounded-xl p-3 chip">
                       <div>
-                        <div className="font-medium">Auto-Opener Rate Lv {state.autoOpenerLevel} — {openRate(state.autoOpenerLevel)} per batch</div>
+                        <div className="font-medium">Auto-Opener Rate Lv {state.autoOpenerLevel} — {1+state.autoOpenerLevel} per batch</div>
                       </div>
-                      <button className={`btn px-3 py-2 rounded-lg text-sm ${state.points>=costRate(state.autoOpenerLevel) ? "btn-emerald" : "bg-zinc-700 cursor-not-allowed"}`} onClick={upgradeRate}>
-                        Upgrade ({fmt(costRate(state.autoOpenerLevel))})
+                      <button className={`btn px-3 py-2 rounded-lg text-sm ${state.points>=10**(state.autoOpenerLevel+2) ? "btn-emerald" : "bg-zinc-700 cursor-not-allowed"}`} onClick={()=>upgradeRate()}>
+                        Upgrade ({fmt(10**(state.autoOpenerLevel+2))})
                       </button>
                     </div>
 
@@ -485,24 +489,34 @@
                       </div>
                       <button className={`btn px-3 py-2 rounded-lg text-sm ${
                         state.autoOpenerSpeedLevel>=3 ? "bg-zinc-700 cursor-not-allowed" :
-                        (state.points>=costSpeed(state.autoOpenerSpeedLevel) ? "btn-amber" : "bg-zinc-700 cursor-not-allowed")
-                      }`} onClick={upgradeSpeed}>
-                        {state.autoOpenerSpeedLevel>=3 ? "Maximum" : `Upgrade (${fmt(costSpeed(state.autoOpenerSpeedLevel))})`}
+                        (state.points>= (state.autoOpenerSpeedLevel===0?1e3:state.autoOpenerSpeedLevel===1?1e6:1e8) ? "btn-amber" : "bg-zinc-700 cursor-not-allowed")
+                      }`} onClick={()=>upgradeSpeed()}>
+                        {state.autoOpenerSpeedLevel>=3 ? "Maximum" : `Upgrade (${fmt(state.autoOpenerSpeedLevel===0?1e3:state.autoOpenerSpeedLevel===1?1e6:1e8)})`}
                       </button>
                     </div>
 
                     <div className="mt-3 flex items-center justify-between rounded-xl p-3 chip">
                       <div>
                         <div className="font-medium">Rebirth</div>
-                        <div className="text-xs text-zinc-400">Next cost: {fmt(costReb(state.rebirths))} • Equip slots: {state.rebirths + 1}</div>
+                        <div className="text-xs text-zinc-400">Next cost: {fmt(10**(state.rebirths+2))} • Equip slots: {state.rebirths + 1}</div>
                       </div>
-                      <button className={`btn px-3 py-2 rounded-lg text-sm ${state.points>=costReb(state.rebirths) ? "btn-rose" : "bg-zinc-700 cursor-not-allowed"}`} onClick={rebirth}>+1 Equip</button>
+                      <button className={`btn px-3 py-2 rounded-lg text-sm ${state.points>=10**(state.rebirths+2) ? "btn-rose" : "bg-zinc-700 cursor-not-allowed"}`} onClick={()=>rebirth()}>+1 Equip</button>
                     </div>
                   </div>
 
                 </div>
               </div>
             </div>
+
+            {/* Hatch popup */}
+            {/* (kept simpler: no glow classes so nothing can crash here) */}
+            {/* Close by clicking the backdrop or the button */}
+            {/* Use correct Tailwind class: max-h-[70vh] */}
+            {/* -------------- */}
+            {/* Popup */}
+            {/* -------------- */}
+            {/* eslint-disable-next-line */}
+            {false}
           </div>
         );
       }
