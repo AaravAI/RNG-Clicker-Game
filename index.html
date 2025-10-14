@@ -29,6 +29,10 @@
       .pop{animation:pop .35s ease both}
       /* cursor follower */
       .cursor-dot{position:fixed;top:0;left:0;pointer-events:none;width:14px;height:14px;border-radius:9999px;transform:translate(-50%,-50%);mix-blend-mode:difference;z-index:9999;border:2px solid rgba(255,255,255,.5);box-shadow:0 0 12px rgba(255,255,255,.25)}
+
+      /* --- ADDED: subtle glow driven by top equipped skin color --- */
+      .glow { box-shadow: 0 0 0 0 rgba(255,255,255,0.0); transition: box-shadow .25s ease; }
+      .glow.use { box-shadow: 0 0 38px 6px var(--glow, rgba(255,255,255,.15)); }
     </style>
   </head>
   <body>
@@ -42,7 +46,17 @@
       function fmt(n){if(!isFinite(n))return"∞";const a=Math.abs(n);for(const u of UNITS)if(a>=u.value)return(n/u.value).toFixed(2).replace(/\.00$/,"")+u.suffix;return Math.floor(n).toString()}
       function toRoman(num){if(num<=0)return"";const R=[[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];let s='';for(const[v,t]of R){while(num>=v){s+=t;num-=v}}return s}
       function roll(table){const total=table.reduce((a,t)=>a+t.chance,0);let r=Math.random()*total,acc=0;for(const it of table){acc+=it.chance;if(r<acc)return it.rarity}return table[table.length-1].rarity}
-      function spawnParticle(e,txt){const p=document.createElement("div");p.className="particle";p.style.left=e.clientX+"px";p.style.top=e.clientY+"px";p.textContent=txt;document.body.appendChild(p);setTimeout(()=>p.remove(),900)}
+      /* ADDED: colored particles */
+      function spawnParticle(e,txt,color){
+        const p=document.createElement("div");
+        p.className="particle";
+        p.style.left=e.clientX+"px";
+        p.style.top=e.clientY+"px";
+        if(color){ p.style.color=color; p.style.textShadow=`0 0 12px ${color}, 0 1px 0 rgba(0,0,0,.5)`; }
+        p.textContent=txt;
+        document.body.appendChild(p);
+        setTimeout(()=>p.remove(),900);
+      }
 
       /* ---------- data ---------- */
       const MAIN_BOX={cost:100,rng:[
@@ -218,6 +232,8 @@
       /* ---------- App ---------- */
       function App(){
         const [state,setState]=useState(loadState());
+        /* ADDED: hatch popup state */
+        const [hatchPopup,setHatchPopup]=useState(null);
         const equipped=useMemo(()=>equippedBest(state.inventory,state.rebirths+1),[state.inventory,state.rebirths]);
         const ppc=useMemo(()=>1+equipped.ppc,[equipped]);
         const topColor=equipped.top ? SKIN.colors[equipped.top.rarity] : "#ffffff";
@@ -227,11 +243,11 @@
         useEffect(()=>{const id=setInterval(()=>saveState(state),5000);return()=>clearInterval(id)},[state]);
         useEffect(()=>{const h=()=>saveState(state);window.addEventListener("beforeunload",h);return()=>window.removeEventListener("beforeunload",h)},[state]);
 
-        // OFFLINE catch-up
+        // OFFLINE catch-up (collect results for popup)
         useEffect(()=>{
           const now=Date.now(); const elapsed=(now-state.lastSeen)/1000; if(elapsed<=1) return;
           let pts=state.points, inv=[...state.inventory], tokens=state.eventTokens;
-
+          const results=[];
           // autoclicker always accrues
           const acInt=autoInt(state.autoClickerLevel); pts+=Math.floor(elapsed/acInt);
 
@@ -245,15 +261,17 @@
               if(state.autoOpenerMode==="main"){
                 if(pts<MAIN_BOX.cost||cnt>=state.invCap) break;
                 pts-=MAIN_BOX.cost; const r=roll(MAIN_BOX.rng);
-                if(state.autoDelete[r]) pts+=Math.floor(MAIN_BOX.cost*0.2);
-                else{const idx=inv.findIndex(i=>i.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1});}
+                if(state.autoDelete[r]){ const refund=Math.floor(MAIN_BOX.cost*0.2); pts+=refund; results.push({rarity:r,autoDeleted:true,refund,box:"Main"}); }
+                else{ const idx=inv.findIndex(i=>i.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1}); results.push({rarity:r,autoDeleted:false,refund:0,box:"Main"}); }
               }else{
                 if(tokens<=0||pts<EVENT_BOX.cost||cnt>=state.invCap) break;
                 pts-=EVENT_BOX.cost; tokens-=1; const r=roll(EVENT_BOX.rng);
-                if(r!=="Nothing"){const idx=inv.findIndex(i=>i.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1});}
+                if(r==="Nothing"){ results.push({rarity:"Nothing",autoDeleted:false,refund:0,box:"Event"}); }
+                else{ const idx=inv.findIndex(i=>i.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1}); results.push({rarity:r,autoDeleted:false,refund:0,box:"Event"}); }
               }
             }
           }
+          if(results.length) setHatchPopup({items:results,count:results.length});
           setState(s=>({...s,points:pts,inventory:inv,eventTokens:tokens,lastSeen:now}));
         },[]);
 
@@ -268,7 +286,7 @@
           return()=>clearInterval(id);
         },[]);
 
-        // auto-opener loop (online)
+        // auto-opener loop (online) — gather results + popup
         useEffect(()=>{
           if(!state.autoOpenerActive) return;
           const ms=speedInterval(state.autoOpenerSpeedLevel)*1000;
@@ -276,20 +294,23 @@
             setState(s=>{
               const rate=openRate(s.autoOpenerLevel);
               let pts=s.points, inv=[...s.inventory], tokens=s.eventTokens;
+              const results=[];
               for(let i=0;i<rate;i++){
                 const cnt=inv.reduce((a,i)=>a+i.qty,0);
-                if(cnt>=s.invCap) return {...s,autoOpenerActive:false,lastSeen:Date.now()};
+                if(cnt>=s.invCap) { setHatchPopup(results.length?{items:results,count:results.length}:null); return {...s,autoOpenerActive:false,lastSeen:Date.now(),points:pts,inventory:inv,eventTokens:tokens}; }
                 if(s.autoOpenerMode==="main"){
-                  if(pts<MAIN_BOX.cost) return {...s,autoOpenerActive:false,lastSeen:Date.now()};
+                  if(pts<MAIN_BOX.cost) { setHatchPopup(results.length?{items:results,count:results.length}:null); return {...s,autoOpenerActive:false,lastSeen:Date.now(),points:pts,inventory:inv,eventTokens:tokens}; }
                   pts-=MAIN_BOX.cost; const r=roll(MAIN_BOX.rng);
-                  if(s.autoDelete[r]) pts+=Math.floor(MAIN_BOX.cost*0.2);
-                  else{const idx=inv.findIndex(it=>it.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1});}
+                  if(s.autoDelete[r]){ const refund=Math.floor(MAIN_BOX.cost*0.2); pts+=refund; results.push({rarity:r,autoDeleted:true,refund,box:"Main"}); }
+                  else{ const idx=inv.findIndex(it=>it.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1}); results.push({rarity:r,autoDeleted:false,refund:0,box:"Main"}); }
                 }else{
-                  if(tokens<=0 || pts<EVENT_BOX.cost) return {...s,autoOpenerActive:false,lastSeen:Date.now()};
+                  if(tokens<=0 || pts<EVENT_BOX.cost) { setHatchPopup(results.length?{items:results,count:results.length}:null); return {...s,autoOpenerActive:false,lastSeen:Date.now(),points:pts,inventory:inv,eventTokens:tokens}; }
                   pts-=EVENT_BOX.cost; tokens-=1; const r=roll(EVENT_BOX.rng);
-                  if(r!=="Nothing"){const idx=inv.findIndex(it=>it.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1});}
+                  if(r==="Nothing"){ results.push({rarity:"Nothing",autoDeleted:false,refund:0,box:"Event"}); }
+                  else{ const idx=inv.findIndex(it=>it.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1}); results.push({rarity:r,autoDeleted:false,refund:0,box:"Event"}); }
                 }
               }
+              if(results.length) setHatchPopup({items:results,count:results.length});
               return {...s,points:pts,inventory:inv,eventTokens:tokens,lastSeen:Date.now()};
             });
           },ms);
@@ -297,20 +318,24 @@
         },[state.autoOpenerActive,state.autoOpenerLevel,state.autoOpenerSpeedLevel,state.autoOpenerMode]);
 
         /* ---------- actions ---------- */
-        const clickPlay=e=>{ setState(s=>({...s,points:s.points+ppc,totalClicks:s.totalClicks+1})); if(e) spawnParticle(e,`+${ppc}`); };
+        const clickPlay=e=>{ setState(s=>({...s,points:s.points+ppc,totalClicks:s.totalClicks+1})); if(e) spawnParticle(e,`+${ppc}`, topColor); };
         const invCount=s=>s.inventory.reduce((a,i)=>a+i.qty,0);
         const openMain=()=>setState(s=>{
           if(s.points<MAIN_BOX.cost||invCount(s)>=s.invCap) return s;
           let pts=s.points-MAIN_BOX.cost; const r=roll(MAIN_BOX.rng);
           if(s.autoDelete[r]) return {...s,points:pts+Math.floor(MAIN_BOX.cost*0.2)};
           const inv=[...s.inventory]; const idx=inv.findIndex(i=>i.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1});
+          /* ADDED: popup for manual opens */
+          setHatchPopup({items:[{rarity:r,autoDeleted:false,refund:0,box:"Main"}],count:1});
           return {...s,points:pts,inventory:inv};
         });
         const openEvent=()=>setState(s=>{
           if(s.eventTokens<=0||s.points<EVENT_BOX.cost||invCount(s)>=s.invCap) return s;
           let pts=s.points-EVENT_BOX.cost; let tok=s.eventTokens-1; const r=roll(EVENT_BOX.rng);
-          if(r==="Nothing") return {...s,points:pts,eventTokens:tok};
+          if(r==="Nothing"){ setHatchPopup({items:[{rarity:"Nothing",autoDeleted:false,refund:0,box:"Event"}],count:1}); return {...s,points:pts,eventTokens:tok}; }
           const inv=[...s.inventory]; const idx=inv.findIndex(i=>i.rarity===r); if(idx>=0) inv[idx]={...inv[idx],qty:inv[idx].qty+1}; else inv.push({rarity:r,level:0,qty:1});
+          /* ADDED: popup for manual opens */
+          setHatchPopup({items:[{rarity:r,autoDeleted:false,refund:0,box:"Event"}],count:1});
           return {...s,points:pts,eventTokens:tok,inventory:inv};
         });
         const buyToken=()=>setState(s=> s.points>=EVENT_BOX.tokenCost?{...s,points:s.points-EVENT_BOX.tokenCost,eventTokens:s.eventTokens+1}:s);
@@ -387,9 +412,10 @@
 
             {/* layout */}
             <div className="pt-14 grid grid-cols-5 gap-4 h-full p-4">
-              {/* Click Zone */}
+              {/* Click Zone with glow */}
               <div className="col-span-3">
-                <div className="relative w-full h-full section rounded-2xl overflow-hidden"
+                <div className="relative w-full h-full section rounded-2xl overflow-hidden glow use"
+                     style={{'--glow': topColor}}
                      onClick={(e)=>clickPlay(e)}>
                   <div className="relative h-full flex items-center justify-center">
                     <div className="text-center">
@@ -531,6 +557,32 @@
                 </div>
               </div>
             </div>
+
+            {/* ADDED: Hatch popup (manual & auto) */}
+            {hatchPopup && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={()=>setHatchPopup(null)}>
+                <div className="relative w-[560px] max-h-[70vh] overflow-y-auto border border-zinc-700 rounded-2xl bg-zinc-900 p-4 pop">
+                  <div className="text-sm text-zinc-300">Opened {hatchPopup.count} {hatchPopup.count>1?"boxes":"box"}</div>
+                  <div className="mt-2 space-y-2">
+                    {hatchPopup.items.map((it,idx)=>(
+                      <div key={idx} className="flex items-center justify-between rounded-xl p-3 bg-zinc-950/60 border border-zinc-800">
+                        <div className="font-semibold">
+                          {it.rarity==="Nothing"?"Nothing":`${it.rarity} ${SKIN.name}`}
+                          <span className="text-xs text-zinc-500 ml-2">({it.box})</span>
+                        </div>
+                        <div className="text-sm">
+                          {it.rarity==="Nothing" ? <span className="text-zinc-400">nothing</span> :
+                            (it.autoDeleted ? <span className="text-amber-400">(auto-deleted +{fmt(it.refund)})</span> : <span className="text-emerald-400">kept</span>)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 text-right">
+                    <button className="btn btn-emerald px-4 py-2 rounded-xl" onClick={()=>setHatchPopup(null)}>Nice!</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       }
