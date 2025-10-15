@@ -512,7 +512,7 @@
                     <div className="mt-3 flex items-center justify-between rounded-xl p-3 chip">
                       <div>
                         <div className="font-medium">Autoclicker Lv {state.autoClickerLevel} {state.autoClickerLevel>=6 && "(MAX)"}</div>
-                        <div className="text-xs text-zinc-400">Adds passive points. Every level halves the interval (max Lv6).</div>
+                        <div className="text-xs text-zinc-400">Autoclicks for you. Upgrading it increases its rate </div>
                       </div>
                       <button className={`btn px-3 py-2 rounded-lg text-sm ${
                         state.autoClickerLevel>=6 ? "bg-zinc-700 cursor-not-allowed" :
@@ -525,7 +525,7 @@
                     <div className="mt-3 flex items-center justify-between rounded-xl p-3 chip">
                       <div>
                         <div className="font-medium">Auto-Opener Rate Lv {state.autoOpenerLevel} — {openRate(state.autoOpenerLevel)} per batch</div>
-                        <div className="text-xs text-zinc-400">Opens more boxes each pulse (works for Main & Event).</div>
+                        <div className="text-xs text-zinc-400">This upgrade opens up more boxes at one time for the auto-opener</div>
                       </div>
                       <button className={`btn px-3 py-2 rounded-lg text-sm ${state.points>=costRate(state.autoOpenerLevel) ? "btn-emerald" : "bg-zinc-700 cursor-not-allowed"}`} onClick={upgradeRate}>
                         Upgrade ({fmt(costRate(state.autoOpenerLevel))})
@@ -535,7 +535,7 @@
                     <div className="mt-3 flex items-center justify-between rounded-xl p-3 chip">
                       <div>
                         <div className="font-medium">Auto-Opener Speed Lv {state.autoOpenerSpeedLevel} {state.autoOpenerSpeedLevel>=3 && "(MAX)"}</div>
-                        <div className="text-xs text-zinc-400">Batches faster: 1s → 0.5s → 0.25s (huge costs: 1k → 1M → 100M).</div>
+                        <div className="text-xs text-zinc-400">This update increases the speed at which hatching takes place</div>
                       </div>
                       <button className={`btn px-3 py-2 rounded-lg text-sm ${
                         state.autoOpenerSpeedLevel>=3 ? "bg-zinc-700 cursor-not-allowed" :
